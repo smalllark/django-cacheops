@@ -128,7 +128,10 @@ class QuerySetMixin(object):
         """
         md = md5()
         md.update('%s.%s' % (self.__class__.__module__, self.__class__.__name__))
-        md.update(stamp_fields(self.model)) # Protect from field list changes in model
+        # Vary cache key for proxy models
+        md.update('%s.%s' % (self.model.__module__, self.model.__name__))
+        # Protect from field list changes in model
+        md.update(stamp_fields(self.model))
         # Use query SQL as part of a key
         try:
             sql, params = self.query.get_compiler(self._db or DEFAULT_DB_ALIAS).as_sql()
@@ -144,9 +147,9 @@ class QuerySetMixin(object):
             md.update(self.db)
         if extra:
             md.update(str(extra))
-        # Need to test for attribute existence cause Django 1.8 and earlier
-        if hasattr(self, '_iterator_class'):
-            it_class = self._iterator_class
+        # Thing only appeared in Django 1.8 and was renamed in Django 1.9
+        it_class = getattr(self, '_iterator_class', None) or getattr(self, '_iterable_class', None)
+        if it_class:
             md.update('%s.%s' % (it_class.__module__, it_class.__name__))
         # 'flat' attribute changes results formatting for values_list() in Django 1.8 and earlier
         if hasattr(self, 'flat'):
@@ -352,10 +355,6 @@ _old_objs = {}
 class ManagerMixin(object):
     @once_per('cls')
     def _install_cacheops(self, cls):
-        # Django 1.7 migrations create lots of fake models, just skip them
-        if cls.__module__ == '__fake__':
-            return
-
         cls._cacheprofile = model_profile(cls)
 
         if family_has_profile(cls):
@@ -371,7 +370,11 @@ class ManagerMixin(object):
 
     def contribute_to_class(self, cls, name):
         self._no_monkey.contribute_to_class(self, cls, name)
-        self._install_cacheops(cls)
+        # Django 1.7+ migrations create lots of fake models, just skip them
+        # NOTE: we make it here rather then inside _install_cacheops()
+        #       because we don't want @once_per() to hold refs to all of them.
+        if cls.__module__ != '__fake__':
+            self._install_cacheops(cls)
 
     def _pre_save(self, sender, instance, **kwargs):
         if instance.pk is not None:
@@ -439,9 +442,6 @@ class ManagerMixin(object):
 
     def inplace(self):
         return self.get_queryset().inplace()
-
-    def get(self, *args, **kwargs):
-        return self.get_queryset().inplace().get(*args, **kwargs)
 
     def cache(self, *args, **kwargs):
         return self.get_queryset().cache(*args, **kwargs)

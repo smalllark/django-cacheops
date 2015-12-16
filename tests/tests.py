@@ -294,21 +294,23 @@ class DecoratorTests(BaseTestCase):
 from datetime import date, datetime, time
 
 class WeirdTests(BaseTestCase):
-    def _template(self, field, value, invalidation=True):
+    def _template(self, field, value):
         qs = Weird.objects.cache().filter(**{field: value})
         count = qs.count()
 
-        Weird.objects.create(**{field: value})
+        obj = Weird.objects.create(**{field: value})
 
-        if invalidation:
-            with self.assertNumQueries(1):
-                self.assertEqual(qs.count(), count + 1)
+        with self.assertNumQueries(2):
+            self.assertEqual(qs.count(), count + 1)
+            new_obj = qs.get(pk=obj.pk)
+            self.assertEqual(getattr(new_obj, field), value)
 
     def test_date(self):
         self._template('date_field', date.today())
 
     def test_datetime(self):
-        self._template('datetime_field', datetime.now())
+        # NOTE: some databases (mysql) don't store microseconds
+        self._template('datetime_field', datetime.now().replace(microsecond=0))
 
     def test_time(self):
         self._template('time_field', time(10, 30))
@@ -571,6 +573,11 @@ class IssueTests(BaseTestCase):
         # Non ascii text in non-unicode str literal
         list(Category.objects.filter(title='фыва').cache())
 
+    @unittest.skipUnless(django.VERSION >= (1, 4), "No .prefetch_related() in Django 1.3")
+    def test_169(self):
+        c = Category.objects.prefetch_related('posts').get(pk=3)
+        c.posts.get(visible=1)  # this used to fail
+
 
 @unittest.skipUnless(os.environ.get('LONG'), "Too long")
 class LongTests(BaseTestCase):
@@ -793,6 +800,7 @@ class ProxyTests(BaseTestCase):
         with self.assertNumQueries(1):
             list(Video.objects.cache())
 
+    @unittest.expectedFailure
     def test_interchange(self):
         list(Video.objects.cache())
 
@@ -815,6 +823,20 @@ class ProxyTests(BaseTestCase):
 
         with self.assertRaises(NonCachedMedia.DoesNotExist):
             MediaProxy.objects.cache().get(title=media.title)
+
+    def test_proxy_caching(self):
+        video = Video.objects.create(title='Pulp Fiction')
+        self.assertEqual(type(Video.objects.cache().get(pk=video.pk)),
+                         Video)
+        self.assertEqual(type(VideoProxy.objects.cache().get(pk=video.pk)),
+                         VideoProxy)
+
+    def test_proxy_caching_reversed(self):
+        video = Video.objects.create(title='Pulp Fiction')
+        self.assertEqual(type(VideoProxy.objects.cache().get(pk=video.pk)),
+                         VideoProxy)
+        self.assertEqual(type(Video.objects.cache().get(pk=video.pk)),
+                         Video)
 
 
 class MultitableInheritanceTests(BaseTestCase):
