@@ -576,10 +576,6 @@ class IssueTests(BaseTestCase):
         list(Category.objects.filter(title='фыва').cache())
         list(Category.objects.filter(title='фыва', title__startswith='фыва').cache())
 
-    def test_169(self):
-        c = Category.objects.prefetch_related('posts').get(pk=3)
-        c.posts.get(visible=1)  # this used to fail
-
     def test_173(self):
         g = Group.objects.create(name='gr')
         g.user_set.add(self.user)
