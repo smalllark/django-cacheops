@@ -18,7 +18,7 @@ from cacheops.transaction import transaction_state
 from cacheops.signals import cache_read
 
 decorator_tag = register.decorator_tag
-from .models import *   # noqa
+from .models import *   # flake8: noqa
 
 
 class BaseTestCase(TestCase):
