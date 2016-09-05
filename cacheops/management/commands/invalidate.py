@@ -2,7 +2,7 @@
 from django.core.management.base import LabelCommand, CommandError
 from django.apps import apps
 
-from cacheops.invalidation import *
+from cacheops.invalidation import *   # flake8: noqa
 
 
 class Command(LabelCommand):

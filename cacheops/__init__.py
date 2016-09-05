@@ -4,10 +4,10 @@ __version__ = '.'.join(map(str, VERSION if VERSION[-1] else VERSION[:2]))
 
 from django.apps import AppConfig
 
-from .simple import *
-from .query import *
-from .invalidation import *
-from .templatetags.cacheops import *
+from .simple import *   # flake8: noqa
+from .query import *   # flake8: noqa
+from .invalidation import *   # flake8: noqa
+from .templatetags.cacheops import *   # flake8: noqa
 from .transaction import install_cacheops_transaction_support
 
 
